@@ -1,0 +1,178 @@
+// Prisma schema for FBS Application
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./database/fbs_app.db"
+}
+
+model Customer {
+  id                           Int      @id @default(autoincrement())
+  account_number               String   @unique
+  class_code                   String
+  class_description            String?
+  business_name_1              String?
+  business_name_2              String?
+  business_address_1           String?
+  business_address_2           String?
+  business_phone_1             String?
+  business_phone_1_desc        String?
+  business_phone_2             String?
+  business_phone_2_desc        String?
+  business_emails              String?  // JSON string
+  billing_name_1               String?
+  billing_name_2               String?
+  billing_address_1            String?
+  billing_address_2            String?
+  billing_address_3            String?
+  billing_phone_1              String?
+  billing_phone_1_desc         String?
+  billing_phone_2              String?
+  billing_phone_2_desc         String?
+  billing_phone_3              String?
+  billing_phone_3_desc         String?
+  billing_emails               String?  // JSON string
+  last_name_1                  String?
+  last_name_2                  String?
+  first_name_1                 String?
+  first_name_2                 String?
+  contact_1_name               String?
+  contact_2_name               String?
+  home_phone_1                 String?
+  home_phone_2                 String?
+  cell_phone_1                 String?
+  cell_phone_1_desc            String?
+  cell_phone_2                 String?
+  cell_phone_2_desc            String?
+  cell_phone_3                 String?
+  cell_phone_3_desc            String?
+  personal_emails              String?  // JSON string
+  billing_code                 String?
+  billing_description          String?
+  billing_amount               Float?
+  next_billing_month            Int?
+  next_billing_year            Int?
+  service_call_rate            Float?
+  hourly_labor_rate            Float?
+  discount_percent             Float?
+  discount_reason              String?
+  installation_date            String?
+  installing_company           String?
+  access_codes                 String?
+  panel_model                  String?
+  panel_location               String?
+  transformer_location         String?
+  panel_codes                  String?
+  panel_phone                  String?
+  zone_list                    String?
+  starlink_model               String?
+  starlink_number              String?
+  central_station              String?
+  central_station_account      String?
+  central_station_password     String?
+  last_fire_inspection_date    String?
+  last_nfpa_form_on_file       Int      @default(0)
+  last_service_date            String?
+  last_service_description     String?
+  custom_comments              String?
+  custom_notes                 String?
+  monitoring_agreement_on_file Int      @default(0)
+  created_at                   DateTime @default(now())
+  updated_at                   DateTime @default(now())
+  
+  invoices                     Invoice[]
+  payments                     Payment[]
+  service_calls                ServiceCall[]
+  estimates                    Estimate[]
+
+  @@index([account_number])
+  @@index([class_code])
+  @@index([business_name_1])
+  @@index([billing_code])
+}
+
+model Invoice {
+  id                Int      @id @default(autoincrement())
+  invoice_number    String   @unique
+  account_number    String
+  date              String
+  description       String
+  amount            Float
+  invoice_type      String?
+  tax_exempt        Int      @default(0)
+  sales_tax_rate    Float?
+  sales_tax_amount  Float?
+  total_amount      Float?
+  status            String   @default("pending")
+  due_date          DateTime?
+  paid_date         DateTime?
+  created_at        DateTime @default(now())
+  
+  customer          Customer @relation(fields: [account_number], references: [account_number])
+  payments          Payment[]
+
+  @@index([account_number])
+  @@index([status])
+}
+
+model Payment {
+  id              Int      @id @default(autoincrement())
+  payment_number  String   @unique
+  account_number  String
+  date            String
+  check_number    String?
+  check_date      String?
+  deposit_date    String?
+  invoice_number  String?
+  amount          Float
+  payment_type    String?
+  created_at      DateTime @default(now())
+  
+  customer        Customer @relation(fields: [account_number], references: [account_number])
+  invoice         Invoice? @relation(fields: [invoice_number], references: [invoice_number])
+
+  @@index([account_number])
+}
+
+model ServiceCall {
+  id                  Int      @id @default(autoincrement())
+  service_call_number String   @unique
+  account_number      String
+  date                String
+  special_message     String?
+  issue_code          String?
+  issue_description   String?
+  custom_problem      String?
+  notes               String?
+  labor_hours         Float?
+  labor_rate          Float?
+  labor_amount        Float?
+  parts_cost          Float?
+  total_amount        Float?
+  completed           Int      @default(0)
+  created_at          DateTime @default(now())
+  
+  customer            Customer @relation(fields: [account_number], references: [account_number])
+
+  @@index([account_number])
+}
+
+model Estimate {
+  id               Int      @id @default(autoincrement())
+  estimate_number  String   @unique
+  account_number   String
+  date             String
+  description      String?
+  items            String?  // JSON string
+  subtotal         Float?
+  tax_amount       Float?
+  total_amount     Float?
+  status           String   @default("pending")
+  valid_until      DateTime?
+  created_at       DateTime @default(now())
+  
+  customer         Customer @relation(fields: [account_number], references: [account_number])
+}
