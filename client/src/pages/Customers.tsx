@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react'
+import { Edit, Plus, Search } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Button } from '../components/ui/Button'
 import { Card, CardContent } from '../components/ui/Card'
 import { Input } from '../components/ui/Input'
-import { Button } from '../components/ui/Button'
-import { Search, Plus, Edit } from 'lucide-react'
 
 interface Customer {
   account_number: string
@@ -13,7 +13,7 @@ interface Customer {
   class_code: string
   billing_address_1?: string
   business_phone_1?: string
-  business_emails?: { email: string }[]
+  business_emails?: Array<{ email: string } | string>
 }
 
 export function Customers() {
@@ -56,16 +56,91 @@ export function Customers() {
     }
   }
 
+  const exportCustomers = () => {
+    if (customers.length === 0) return
+
+    const headers = ['account_number', 'business_name_1', 'class_code', 'billing_address_1', 'business_phone_1', 'business_emails']
+    const csvRows = [headers.join(',')]
+
+    const escapeCsv = (value: any) => {
+      const stringValue = value === null || value === undefined ? '' : String(value)
+      const escaped = stringValue.replace(/"/g, '""')
+      return `"${escaped}"`
+    }
+
+    customers.forEach((customer) => {
+      const row = headers.map((key) => {
+        const value = (customer as any)[key]
+        if (Array.isArray(value)) {
+          return escapeCsv(value.map((item) => typeof item === 'string' ? item : item.email).join('; '))
+        }
+        return escapeCsv(value)
+      })
+      csvRows.push(row.join(','))
+    })
+
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = 'customers.csv'
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    URL.revokeObjectURL(url)
+  }
+
+  const printCustomers = () => {
+    const printWindow = window.open('', 'PRINT', 'width=900,height=700')
+    if (!printWindow) return
+    const html = `
+      <html>
+        <head>
+          <title>Customers</title>
+          <style>body{font-family:sans-serif;padding:20px;}table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ccc;padding:8px;text-align:left;}th{background:#f3f4f6;}</style>
+        </head>
+        <body>
+          <h1>Customers</h1>
+          <table>
+            <thead>
+              <tr>
+                <th>Account #</th><th>Name</th><th>Class Code</th><th>Address</th><th>Phone</th><th>Email</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${customers.map((customer) => {
+      const email = customer.business_emails && customer.business_emails[0] ? (typeof customer.business_emails[0] === 'string' ? customer.business_emails[0] : customer.business_emails[0].email) : '-'
+      const name = customer.business_name_1 || `${customer.first_name_1 || ''} ${customer.last_name_1 || ''}`.trim()
+      return `<tr><td>${customer.account_number}</td><td>${name}</td><td>${customer.class_code}</td><td>${customer.billing_address_1 || ''}</td><td>${customer.business_phone_1 || ''}</td><td>${email}</td></tr>`
+    }).join('')}
+            </tbody>
+          </table>
+        </body>
+      </html>`
+    printWindow.document.write(html)
+    printWindow.document.close()
+    printWindow.focus()
+    printWindow.print()
+  }
+
   return (
     <div className="p-8">
       <div className="flex justify-between items-center mb-8">
         <h1 className="text-3xl font-bold">Customers</h1>
-        <Link to="/customers/new">
-          <Button>
-            <Plus className="w-4 h-4 mr-2" />
-            Add Customer
+        <div className="flex gap-3">
+          <Button variant="outline" onClick={exportCustomers}>
+            Export
           </Button>
-        </Link>
+          <Button variant="outline" onClick={printCustomers}>
+            Print
+          </Button>
+          <Link to="/customers/new">
+            <Button>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Customer
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Search */}
@@ -80,11 +155,17 @@ export function Customers() {
               >
                 <option value="all">All Fields</option>
                 <option value="account_number">Account Number</option>
-                <option value="business_name_1">Business Name</option>
-                <option value="last_name_1">Last Name</option>
-                <option value="billing_address_1">Address</option>
-                <option value="business_phone_1">Phone</option>
-                <option value="business_emails">Email</option>
+                <option value="name">Name</option>
+                <option value="address">Address</option>
+                <option value="telephone">Telephone</option>
+                <option value="email">Email</option>
+                <option value="starlink_number">Starlink Number</option>
+                <option value="invoice_number">Invoice Number</option>
+                <option value="system_type">System Type</option>
+                <option value="class_code">Class Code</option>
+                <option value="billing_code">Billing Code</option>
+                <option value="zip">Zip Code</option>
+                <option value="area_code">Area Code</option>
               </select>
             </div>
             <div className="flex-1">
@@ -129,8 +210,8 @@ export function Customers() {
                     <tr key={customer.account_number} className="border-b hover:bg-gray-50">
                       <td className="py-3 px-4">{customer.account_number}</td>
                       <td className="py-3 px-4">
-                        {customer.business_name_1 || 
-                         `${customer.first_name_1} ${customer.last_name_1}`}
+                        {customer.business_name_1 ||
+                          `${customer.first_name_1} ${customer.last_name_1}`}
                       </td>
                       <td className="py-3 px-4">
                         <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm">
@@ -141,9 +222,18 @@ export function Customers() {
                       <td className="py-3 px-4">{customer.business_phone_1}</td>
                       <td className="py-3 px-4">
                         {customer.business_emails && customer.business_emails[0] ? (
-                          <a href={`mailto:${customer.business_emails[0].email}`} className="text-blue-600 hover:underline">
-                            {customer.business_emails[0].email}
-                          </a>
+                          (() => {
+                            const emailItem = customer.business_emails![0]
+                            const email = typeof emailItem === 'string' ? emailItem : emailItem.email
+                            return (
+                              <a
+                                href={`mailto:${email}?subject=${encodeURIComponent(`FBS Account ${customer.account_number}`)}`}
+                                className="text-blue-600 hover:underline"
+                              >
+                                {email}
+                              </a>
+                            )
+                          })()
                         ) : '-'}
                       </td>
                       <td className="py-3 px-4">

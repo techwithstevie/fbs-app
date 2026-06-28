@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
-import { Input } from '../components/ui/Input'
+import { ArrowLeft, Plus, Save, Trash2 } from 'lucide-react'
+import { ChangeEvent, useEffect, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
+import { Input } from '../components/ui/Input'
 import { Label } from '../components/ui/Label'
-import { ArrowLeft, Save, Plus, Trash2 } from 'lucide-react'
 
 const CLASS_CODE_DESCRIPTIONS: Record<string, Record<string, string>> = {
   status: {
@@ -144,6 +144,8 @@ export function CustomerForm() {
   const navigate = useNavigate()
   const isEditing = !!accountNumber
   const [loading, setLoading] = useState(isEditing)
+  const [errors, setErrors] = useState<string[]>([])
+  const [successMessage, setSuccessMessage] = useState('')
 
   const [formData, setFormData] = useState<FormData>({
     account_number: '',
@@ -232,15 +234,33 @@ export function CustomerForm() {
   }
 
   const fetchCustomer = async () => {
+    const parseEmailArray = (value: any): Email[] => {
+      if (!value) return []
+      if (Array.isArray(value)) return value
+      if (typeof value === 'string') {
+        try {
+          return JSON.parse(value)
+        } catch {
+          return []
+        }
+      }
+      return []
+    }
+
     try {
       const response = await fetch(`/api/customers/${accountNumber}`)
       const data = await response.json()
-      // Parse JSON strings for email arrays
       setFormData({
         ...data,
-        business_emails: data.business_emails ? JSON.parse(data.business_emails) : [],
-        billing_emails: data.billing_emails ? JSON.parse(data.billing_emails) : [],
-        personal_emails: data.personal_emails ? JSON.parse(data.personal_emails) : []
+        billing_amount: data.billing_amount != null ? String(data.billing_amount) : '',
+        service_call_rate: data.service_call_rate != null ? String(data.service_call_rate) : '',
+        hourly_labor_rate: data.hourly_labor_rate != null ? String(data.hourly_labor_rate) : '',
+        discount_percent: data.discount_percent != null ? String(data.discount_percent) : '',
+        business_emails: parseEmailArray(data.business_emails),
+        billing_emails: parseEmailArray(data.billing_emails),
+        personal_emails: parseEmailArray(data.personal_emails),
+        last_nfpa_form_on_file: Boolean(data.last_nfpa_form_on_file),
+        monitoring_agreement_on_file: Boolean(data.monitoring_agreement_on_file)
       })
     } catch (error) {
       console.error('Error fetching customer:', error)
@@ -249,7 +269,7 @@ export function CustomerForm() {
     }
   }
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target
     const checked = (e.target as HTMLInputElement).checked
     setFormData(prev => ({
@@ -258,16 +278,19 @@ export function CustomerForm() {
     }))
   }
 
-  const handleClassCodeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleClassCodeChange = (e: ChangeEvent<HTMLInputElement>) => {
     const code = e.target.value
+    const status = CLASS_CODE_DESCRIPTIONS.status[code[0] || ''] || ''
+    const type = CLASS_CODE_DESCRIPTIONS.type[code[1] || ''] || ''
+    const system = CLASS_CODE_DESCRIPTIONS.system[code[2] || ''] || ''
     setFormData(prev => ({
       ...prev,
       class_code: code,
-      class_description: `${CLASS_CODE_DESCRIPTIONS.status[code[0]] || ''} ${CLASS_CODE_DESCRIPTIONS.type[code[1]] || ''} ${CLASS_CODE_DESCRIPTIONS.system[code[2]] || ''}`
+      class_description: `${status} ${type} ${system}`.trim()
     }))
   }
 
-  const handleBillingCodeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleBillingCodeChange = (e: ChangeEvent<HTMLSelectElement>) => {
     const code = e.target.value
     setFormData(prev => ({
       ...prev,
@@ -286,7 +309,7 @@ export function CustomerForm() {
   const updateEmail = (type: keyof FormData, index: number, field: string, value: string) => {
     setFormData(prev => ({
       ...prev,
-      [type]: (prev[type] as Email[]).map((item, i) => 
+      [type]: (prev[type] as Email[]).map((item, i) =>
         i === index ? { ...item, [field]: value } : item
       )
     }))
@@ -299,14 +322,55 @@ export function CustomerForm() {
     }))
   }
 
+  const validateForm = () => {
+    const nextErrors: string[] = []
+
+    if (!formData.account_number.match(/^\d{1,10}$/)) {
+      nextErrors.push('Account number must be 1-10 digits.')
+    }
+
+    if (!formData.class_code.match(/^\d{4}$/)) {
+      nextErrors.push('Class code must be exactly 4 digits.')
+    }
+
+    if (!formData.billing_code.match(/^\d{1,3}$/)) {
+      nextErrors.push('Billing code is required and must be 1-3 digits.')
+    }
+
+    if (formData.billing_amount !== '' && Number(formData.billing_amount) < 0) {
+      nextErrors.push('Billing amount cannot be negative.')
+    }
+
+    if (formData.discount_percent !== '' && (Number(formData.discount_percent) < 0 || Number(formData.discount_percent) > 100)) {
+      nextErrors.push('Discount percent must be between 0 and 100.')
+    }
+
+    const emailFields: Array<keyof FormData> = ['business_emails', 'billing_emails', 'personal_emails']
+    emailFields.forEach((field) => {
+      const emails = formData[field] as Email[]
+      emails.forEach((entry, index) => {
+        if (entry.email.trim() !== '' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(entry.email)) {
+          nextErrors.push(`${field.replace('_', ' ')} #${index + 1} must be a valid email address.`)
+        }
+      })
+    })
+
+    setErrors(nextErrors)
+    return nextErrors.length === 0
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!validateForm()) {
+      return
+    }
+
     try {
-      const url = isEditing 
+      const url = isEditing
         ? `/api/customers/${accountNumber}`
         : '/api/customers'
       const method = isEditing ? 'PUT' : 'POST'
-      
+
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -314,7 +378,16 @@ export function CustomerForm() {
       })
 
       if (response.ok) {
-        navigate('/customers')
+        setSuccessMessage('Customer saved successfully.')
+        setErrors([])
+        setTimeout(() => {
+          navigate('/customers')
+        }, 1200)
+      } else {
+        const errorData = await response.json()
+        if (errorData?.details) {
+          setErrors([errorData.error, ...errorData.details.map((detail: any) => detail.message)])
+        }
       }
     } catch (error) {
       console.error('Error saving customer:', error)
@@ -339,6 +412,21 @@ export function CustomerForm() {
       </div>
 
       <form onSubmit={handleSubmit}>
+        {successMessage && (
+          <div className="mb-6 rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-700">
+            {successMessage}
+          </div>
+        )}
+        {errors.length > 0 && (
+          <div className="mb-6 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            <p className="font-semibold">Please fix the following issues:</p>
+            <ul className="mt-2 list-disc list-inside space-y-1">
+              {errors.map((error, index) => (
+                <li key={index}>{error}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         {/* Account Information */}
         <Card className="mb-6">
           <CardHeader>
@@ -560,6 +648,72 @@ export function CustomerForm() {
                   maxLength={100}
                 />
               </div>
+              <div className="md:col-span-2">
+                <Label>Billing Address 2</Label>
+                <Input
+                  name="billing_address_2"
+                  value={formData.billing_address_2}
+                  onChange={handleChange}
+                  maxLength={100}
+                />
+              </div>
+              <div className="md:col-span-2">
+                <Label>Billing Address 3</Label>
+                <Input
+                  name="billing_address_3"
+                  value={formData.billing_address_3}
+                  onChange={handleChange}
+                  maxLength={100}
+                />
+              </div>
+              <div>
+                <Label>Billing Phone 1</Label>
+                <Input
+                  name="billing_phone_1"
+                  value={formData.billing_phone_1}
+                  onChange={handleChange}
+                />
+              </div>
+              <div>
+                <Label>Billing Phone 1 Description</Label>
+                <Input
+                  name="billing_phone_1_desc"
+                  value={formData.billing_phone_1_desc}
+                  onChange={handleChange}
+                />
+              </div>
+              <div>
+                <Label>Billing Phone 2</Label>
+                <Input
+                  name="billing_phone_2"
+                  value={formData.billing_phone_2}
+                  onChange={handleChange}
+                />
+              </div>
+              <div>
+                <Label>Billing Phone 2 Description</Label>
+                <Input
+                  name="billing_phone_2_desc"
+                  value={formData.billing_phone_2_desc}
+                  onChange={handleChange}
+                />
+              </div>
+              <div>
+                <Label>Billing Phone 3</Label>
+                <Input
+                  name="billing_phone_3"
+                  value={formData.billing_phone_3}
+                  onChange={handleChange}
+                />
+              </div>
+              <div>
+                <Label>Billing Phone 3 Description</Label>
+                <Input
+                  name="billing_phone_3_desc"
+                  value={formData.billing_phone_3_desc}
+                  onChange={handleChange}
+                />
+              </div>
               <div>
                 <Label>Billing Amount</Label>
                 <Input
@@ -580,6 +734,186 @@ export function CustomerForm() {
                   onChange={handleChange}
                 />
               </div>
+              <div>
+                <Label>Hourly Labor Rate</Label>
+                <Input
+                  name="hourly_labor_rate"
+                  type="number"
+                  step="0.01"
+                  value={formData.hourly_labor_rate}
+                  onChange={handleChange}
+                />
+              </div>
+              <div>
+                <Label>Discount %</Label>
+                <Input
+                  name="discount_percent"
+                  type="number"
+                  step="0.01"
+                  value={formData.discount_percent}
+                  onChange={handleChange}
+                />
+              </div>
+              <div className="md:col-span-2">
+                <Label>Discount Reason</Label>
+                <Input
+                  name="discount_reason"
+                  value={formData.discount_reason}
+                  onChange={handleChange}
+                  maxLength={50}
+                />
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <div className="flex justify-between items-center mb-2">
+                <Label>Billing Emails</Label>
+                <Button type="button" variant="outline" size="sm" onClick={() => addEmail('billing_emails')}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Email
+                </Button>
+              </div>
+              {formData.billing_emails.map((email, index) => (
+                <div key={index} className="flex gap-2 mb-2">
+                  <Input
+                    placeholder="Email address"
+                    value={email.email}
+                    onChange={(e) => updateEmail('billing_emails', index, 'email', e.target.value)}
+                  />
+                  <Input
+                    placeholder="Description"
+                    value={email.description}
+                    onChange={(e) => updateEmail('billing_emails', index, 'description', e.target.value)}
+                    className="w-32"
+                  />
+                  <Button type="button" variant="destructive" size="icon" onClick={() => removeEmail('billing_emails', index)}>
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Contact & Notification</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label>Contact 1 Name</Label>
+                <Input
+                  name="contact_1_name"
+                  value={formData.contact_1_name}
+                  onChange={handleChange}
+                  maxLength={50}
+                />
+              </div>
+              <div>
+                <Label>Contact 2 Name</Label>
+                <Input
+                  name="contact_2_name"
+                  value={formData.contact_2_name}
+                  onChange={handleChange}
+                  maxLength={50}
+                />
+              </div>
+              <div>
+                <Label>Home Phone 1</Label>
+                <Input
+                  name="home_phone_1"
+                  value={formData.home_phone_1}
+                  onChange={handleChange}
+                />
+              </div>
+              <div>
+                <Label>Home Phone 2</Label>
+                <Input
+                  name="home_phone_2"
+                  value={formData.home_phone_2}
+                  onChange={handleChange}
+                />
+              </div>
+              <div>
+                <Label>Cell Phone 1</Label>
+                <Input
+                  name="cell_phone_1"
+                  value={formData.cell_phone_1}
+                  onChange={handleChange}
+                />
+              </div>
+              <div>
+                <Label>Cell Phone 1 Description</Label>
+                <Input
+                  name="cell_phone_1_desc"
+                  value={formData.cell_phone_1_desc}
+                  onChange={handleChange}
+                  maxLength={25}
+                />
+              </div>
+              <div>
+                <Label>Cell Phone 2</Label>
+                <Input
+                  name="cell_phone_2"
+                  value={formData.cell_phone_2}
+                  onChange={handleChange}
+                />
+              </div>
+              <div>
+                <Label>Cell Phone 2 Description</Label>
+                <Input
+                  name="cell_phone_2_desc"
+                  value={formData.cell_phone_2_desc}
+                  onChange={handleChange}
+                  maxLength={25}
+                />
+              </div>
+              <div>
+                <Label>Cell Phone 3</Label>
+                <Input
+                  name="cell_phone_3"
+                  value={formData.cell_phone_3}
+                  onChange={handleChange}
+                />
+              </div>
+              <div>
+                <Label>Cell Phone 3 Description</Label>
+                <Input
+                  name="cell_phone_3_desc"
+                  value={formData.cell_phone_3_desc}
+                  onChange={handleChange}
+                  maxLength={25}
+                />
+              </div>
+            </div>
+
+            <div className="mt-4">
+              <div className="flex justify-between items-center mb-2">
+                <Label>Personal Emails</Label>
+                <Button type="button" variant="outline" size="sm" onClick={() => addEmail('personal_emails')}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Email
+                </Button>
+              </div>
+              {formData.personal_emails.map((email, index) => (
+                <div key={index} className="flex gap-2 mb-2">
+                  <Input
+                    placeholder="Email address"
+                    value={email.email}
+                    onChange={(e) => updateEmail('personal_emails', index, 'email', e.target.value)}
+                  />
+                  <Input
+                    placeholder="Description"
+                    value={email.description}
+                    onChange={(e) => updateEmail('personal_emails', index, 'description', e.target.value)}
+                    className="w-32"
+                  />
+                  <Button type="button" variant="destructive" size="icon" onClick={() => removeEmail('personal_emails', index)}>
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>

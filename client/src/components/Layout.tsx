@@ -1,19 +1,20 @@
-import { Outlet, useLocation } from 'react-router-dom'
-import { 
-  LayoutDashboard, 
-  Users, 
-  FileText, 
-  DollarSign, 
-  Wrench, 
-  BarChart3, 
-  FileCheck, 
+import {
+  BarChart3,
+  Calendar,
   ClipboardList,
-  Calendar
+  DollarSign,
+  FileCheck,
+  FileText,
+  LayoutDashboard,
+  Settings,
+  Users,
+  Wrench
 } from 'lucide-react'
+import { Outlet, useLocation } from 'react-router-dom'
 
 export function Layout() {
   const location = useLocation()
-  
+
   const navigation = [
     { name: 'Dashboard', href: '/', icon: LayoutDashboard },
     { name: 'Customers', href: '/customers', icon: Users },
@@ -23,6 +24,8 @@ export function Layout() {
     { name: 'Reports', href: '/reports', icon: BarChart3 },
     { name: 'Statements', href: '/statements', icon: FileCheck },
     { name: 'Forms', href: '/forms', icon: ClipboardList },
+    { name: 'Accounts', href: '/accounts', icon: Settings },
+    { name: 'Estimates', href: '/estimates', icon: FileText },
     { name: 'Scheduling', href: '/scheduling', icon: Calendar },
   ]
 
@@ -42,11 +45,10 @@ export function Layout() {
               <a
                 key={item.name}
                 href={item.href}
-                className={`flex items-center px-6 py-3 transition-colors ${
-                  isActive
-                    ? 'bg-slate-800 border-l-4 border-blue-500'
-                    : 'hover:bg-slate-800 border-l-4 border-transparent'
-                }`}
+                className={`flex items-center px-6 py-3 transition-colors ${isActive
+                  ? 'bg-slate-800 border-l-4 border-blue-500'
+                  : 'hover:bg-slate-800 border-l-4 border-transparent'
+                  }`}
               >
                 <Icon className="w-5 h-5 mr-3" />
                 {item.name}

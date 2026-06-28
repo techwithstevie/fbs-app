@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Request, Response, Router } from 'express';
 
 const router = Router();
 
@@ -67,12 +67,12 @@ router.get('/class-code/description', (req: Request, res: Response) => {
   if (!code || typeof code !== 'string' || code.length !== 4) {
     return res.status(400).json({ error: 'Invalid class code' });
   }
-  
+
   const status = CLASS_CODE_DESCRIPTIONS.status[code[0]] || 'Unknown';
   const type = CLASS_CODE_DESCRIPTIONS.type[code[1]] || 'Unknown';
   const system = CLASS_CODE_DESCRIPTIONS.system[code[2]] || 'Unknown';
   const description = `${status} ${type} ${system}`;
-  
+
   res.json({ description });
 });
 
@@ -81,7 +81,7 @@ router.get('/billing-code/description', (req: Request, res: Response) => {
   const { code } = req.query;
   const description = BILLING_CODE_DESCRIPTIONS[code as string] || 'Unknown';
   const taxExempt = parseInt(code as string) >= 20;
-  
+
   res.json({ description, taxExempt });
 });
 
@@ -90,17 +90,35 @@ router.post('/update-billing', async (req: Request, res: Response) => {
   try {
     const { criteria, updateType, value } = req.body;
     const { prisma } = require('../index');
-    
+
     const where: any = {};
-    
+
+    if (criteria.accountNumber) {
+      where.account_number = criteria.accountNumber;
+    }
     if (criteria.classCode) {
       where.class_code = criteria.classCode;
+    } else if (criteria.systemType) {
+      where.class_code = { contains: criteria.systemType };
     }
-    if (criteria.systemType) {
-      where.class_code = { contains: `_${criteria.systemType}_` };
+    if (criteria.name) {
+      where.OR = [
+        { business_name_1: { contains: criteria.name, mode: 'insensitive' } },
+        { business_name_2: { contains: criteria.name, mode: 'insensitive' } },
+        { first_name_1: { contains: criteria.name, mode: 'insensitive' } },
+        { first_name_2: { contains: criteria.name, mode: 'insensitive' } },
+        { last_name_1: { contains: criteria.name, mode: 'insensitive' } },
+        { last_name_2: { contains: criteria.name, mode: 'insensitive' } }
+      ];
     }
     if (criteria.city) {
       where.billing_address_1 = { contains: criteria.city };
+    }
+    if (criteria.centralStation) {
+      where.central_station = { contains: criteria.centralStation, mode: 'insensitive' };
+    }
+    if (criteria.monitoringAgreementOnFile !== undefined) {
+      where.monitoring_agreement_on_file = criteria.monitoringAgreementOnFile ? 1 : 0;
     }
     if (criteria.dateInstalledFrom) {
       where.installation_date = { gte: criteria.dateInstalledFrom };
@@ -108,23 +126,29 @@ router.post('/update-billing', async (req: Request, res: Response) => {
     if (criteria.dateInstalledTo) {
       where.installation_date = { lte: criteria.dateInstalledTo };
     }
-    
-    const updateData: any = {};
+
     if (updateType === 'percentage') {
-      updateData.billing_amount = { increment: (value / 100) };
+      const accountsToUpdate = await prisma.customer.findMany({ where, select: { account_number: true, billing_amount: true } });
+      const updateResults = [] as any[];
+
+      for (const account of accountsToUpdate) {
+        const currentAmount = Number(account.billing_amount || 0);
+        const updatedAmount = currentAmount * (1 + Number(value) / 100);
+        updateResults.push(
+          prisma.customer.update({
+            where: { account_number: account.account_number },
+            data: { billing_amount: Number(updatedAmount.toFixed(2)) }
+          })
+        );
+      }
+
+      await Promise.all(updateResults);
     } else if (updateType === 'fixed') {
-      updateData.billing_amount = value;
+      await prisma.customer.updateMany({ where, data: { billing_amount: Number(value) } });
     }
-    
-    const result = await prisma.customer.updateMany({
-      where,
-      data: updateData
-    });
-    
-    res.json({
-      updated: result.count,
-      accounts: await prisma.customer.findMany({ where })
-    });
+
+    const updatedAccounts = await prisma.customer.findMany({ where });
+    res.json({ updated: updatedAccounts.length, accounts: updatedAccounts });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
@@ -136,17 +160,49 @@ router.post('/update-tax-rate', async (req: Request, res: Response) => {
   try {
     const { taxRate, criteria } = req.body;
     const { prisma } = require('../index');
-    
+
     const where: any = {};
-    if (criteria && criteria.taxExemptOnly) {
-      where.billing_code = { gte: '20' };
+    if (criteria) {
+      if (criteria.accountNumber) {
+        where.account_number = criteria.accountNumber;
+      }
+      if (criteria.classCode) {
+        where.class_code = criteria.classCode;
+      } else if (criteria.systemType) {
+        where.class_code = { contains: criteria.systemType };
+      }
+      if (criteria.name) {
+        where.OR = [
+          { business_name_1: { contains: criteria.name, mode: 'insensitive' } },
+          { business_name_2: { contains: criteria.name, mode: 'insensitive' } },
+          { first_name_1: { contains: criteria.name, mode: 'insensitive' } },
+          { first_name_2: { contains: criteria.name, mode: 'insensitive' } },
+          { last_name_1: { contains: criteria.name, mode: 'insensitive' } },
+          { last_name_2: { contains: criteria.name, mode: 'insensitive' } }
+        ];
+      }
+      if (criteria.city) {
+        where.billing_address_1 = { contains: criteria.city };
+      }
+      if (criteria.centralStation) {
+        where.central_station = { contains: criteria.centralStation, mode: 'insensitive' };
+      }
+      if (criteria.monitoringAgreementOnFile !== undefined) {
+        where.monitoring_agreement_on_file = criteria.monitoringAgreementOnFile ? 1 : 0;
+      }
+      if (criteria.dateInstalledFrom) {
+        where.installation_date = { gte: criteria.dateInstalledFrom };
+      }
+      if (criteria.dateInstalledTo) {
+        where.installation_date = { lte: criteria.dateInstalledTo };
+      }
     }
-    
+
     const result = await prisma.customer.updateMany({
       where,
       data: { sales_tax_rate: taxRate }
     });
-    
+
     res.json({
       updated: result.count
     });

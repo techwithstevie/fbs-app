@@ -1,15 +1,17 @@
-import { useState, useEffect } from 'react'
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
-import { Input } from '../components/ui/Input'
+import { Check, Download, Plus } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { Button } from '../components/ui/Button'
-import { Plus, Check } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
+import { Input } from '../components/ui/Input'
 
 interface ServiceCall {
   id: string
   account_number: string
   date: string
   issue_code: string
+  special_message?: string
   description: string
+  custom_problem?: string
   labor_hours: number
   parts_cost: number
   completed: boolean
@@ -18,11 +20,14 @@ interface ServiceCall {
 export function ServiceCalls() {
   const [serviceCalls, setServiceCalls] = useState<ServiceCall[]>([])
   const [loading, setLoading] = useState(true)
+  const [successMessage, setSuccessMessage] = useState('')
   const [formData, setFormData] = useState({
     account_number: '',
     date: new Date().toISOString().split('T')[0],
+    special_message: '',
     issue_code: '',
     description: '',
+    custom_problem: '',
     labor_hours: '',
     parts_cost: ''
   })
@@ -35,7 +40,7 @@ export function ServiceCalls() {
     try {
       const response = await fetch('/api/service-calls')
       const data = await response.json()
-      setServiceCalls(data.serviceCalls || [])
+      setServiceCalls(Array.isArray(data) ? data : data.serviceCalls || [])
     } catch (error) {
       console.error('Error fetching service calls:', error)
     } finally {
@@ -56,11 +61,15 @@ export function ServiceCalls() {
         setFormData({
           account_number: '',
           date: new Date().toISOString().split('T')[0],
+          special_message: '',
           issue_code: '',
           description: '',
+          custom_problem: '',
           labor_hours: '',
           parts_cost: ''
         })
+        setSuccessMessage('Service call created successfully.')
+        setTimeout(() => setSuccessMessage(''), 3000)
       }
     } catch (error) {
       console.error('Error creating service call:', error)
@@ -78,6 +87,26 @@ export function ServiceCalls() {
     }
   }
 
+  const downloadServiceCall = async (serviceCallNumber: string) => {
+    try {
+      const response = await fetch(`/api/service-calls/${serviceCallNumber}/download`)
+      if (!response.ok) {
+        throw new Error('Failed to download service call')
+      }
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `${serviceCallNumber}.pdf`
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Error downloading service call:', error)
+    }
+  }
+
   return (
     <div className="p-8">
       <div className="flex justify-between items-center mb-8">
@@ -89,22 +118,32 @@ export function ServiceCalls() {
           <CardTitle>Create Service Call</CardTitle>
         </CardHeader>
         <CardContent>
+          {successMessage && (
+            <div className="mb-4 rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-700">
+              {successMessage}
+            </div>
+          )}
           <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <Input
               placeholder="Account Number"
               value={formData.account_number}
-              onChange={(e) => setFormData({...formData, account_number: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, account_number: e.target.value })}
               required
             />
             <Input
               type="date"
               value={formData.date}
-              onChange={(e) => setFormData({...formData, date: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, date: e.target.value })}
               required
+            />
+            <Input
+              placeholder="Special Message"
+              value={formData.special_message}
+              onChange={(e) => setFormData({ ...formData, special_message: e.target.value })}
             />
             <select
               value={formData.issue_code}
-              onChange={(e) => setFormData({...formData, issue_code: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, issue_code: e.target.value })}
               className="h-10 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
               required
             >
@@ -120,22 +159,30 @@ export function ServiceCalls() {
             <Input
               placeholder="Description"
               value={formData.description}
-              onChange={(e) => setFormData({...formData, description: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               className="md:col-span-2"
             />
+            {formData.issue_code === '49' && (
+              <Input
+                placeholder="Custom Problem"
+                value={formData.custom_problem}
+                onChange={(e) => setFormData({ ...formData, custom_problem: e.target.value })}
+                className="md:col-span-2"
+              />
+            )}
             <Input
               type="number"
               step="0.5"
               placeholder="Labor Hours"
               value={formData.labor_hours}
-              onChange={(e) => setFormData({...formData, labor_hours: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, labor_hours: e.target.value })}
             />
             <Input
               type="number"
               step="0.01"
               placeholder="Parts Cost"
               value={formData.parts_cost}
-              onChange={(e) => setFormData({...formData, parts_cost: e.target.value})}
+              onChange={(e) => setFormData({ ...formData, parts_cost: e.target.value })}
             />
             <Button type="submit">
               <Plus className="w-4 h-4 mr-2" />
@@ -172,7 +219,7 @@ export function ServiceCalls() {
                       <td className="py-3 px-4">{call.account_number}</td>
                       <td className="py-3 px-4">{call.date}</td>
                       <td className="py-3 px-4">{call.issue_code}</td>
-                      <td className="py-3 px-4">{call.description}</td>
+                      <td className="py-3 px-4">{call.special_message || call.description || (call.custom_problem ? `Custom: ${call.custom_problem}` : '')}</td>
                       <td className="py-3 px-4">{call.labor_hours}</td>
                       <td className="py-3 px-4">${call.parts_cost.toFixed(2)}</td>
                       <td className="py-3 px-4">
@@ -182,12 +229,15 @@ export function ServiceCalls() {
                           <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded text-sm">Pending</span>
                         )}
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-4 flex gap-2">
                         {!call.completed && (
                           <Button variant="outline" size="sm" onClick={() => markComplete(call.id)}>
                             <Check className="w-4 h-4" />
                           </Button>
                         )}
+                        <Button variant="outline" size="sm" onClick={() => downloadServiceCall(call.service_call_number)}>
+                          <Download className="w-4 h-4" />
+                        </Button>
                       </td>
                     </tr>
                   ))}

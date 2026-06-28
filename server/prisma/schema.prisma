@@ -53,6 +53,7 @@ model Customer {
   billing_code                 String?
   billing_description          String?
   billing_amount               Float?
+  sales_tax_rate               Float?
   next_billing_month            Int?
   next_billing_year            Int?
   service_call_rate            Float?
@@ -87,11 +88,26 @@ model Customer {
   payments                     Payment[]
   service_calls                ServiceCall[]
   estimates                    Estimate[]
+  reminders                    Reminder[]
 
   @@index([account_number])
   @@index([class_code])
   @@index([business_name_1])
   @@index([billing_code])
+}
+
+model Reminder {
+  id             Int      @id @default(autoincrement())
+  account_number String
+  reminder_type  String
+  due_date       String
+  description    String?
+  completed      Int      @default(0)
+  created_at     DateTime @default(now())
+
+  customer       Customer @relation(fields: [account_number], references: [account_number])
+
+  @@index([account_number])
 }
 
 model Invoice {

@@ -1,8 +1,15 @@
+import { Download, FileText, Printer } from 'lucide-react'
 import { useState } from 'react'
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
-import { Input } from '../components/ui/Input'
 import { Button } from '../components/ui/Button'
-import { FileText, Download, Printer } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
+import { Input } from '../components/ui/Input'
+
+const DOCUMENT_TEMPLATES = [
+  { value: 'J10-FireAlarm-Completion-Report.pdf', label: 'Fire Alarm Completion Report' },
+  { value: 'lighting-cert.pdf', label: 'Lighting Certificate' },
+  { value: 'monitoring-agreement.pdf', label: 'Monitoring Agreement' },
+  { value: 'service-agreement.pdf', label: 'Service Agreement' }
+]
 
 export function Forms() {
   const [accountNumber, setAccountNumber] = useState('')
@@ -21,6 +28,32 @@ export function Forms() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const downloadFormPdf = async () => {
+    if (!formType || !accountNumber) return
+    try {
+      const response = await fetch(`/api/forms/${formType}/${accountNumber}/download`)
+      if (!response.ok) throw new Error('Failed to download form PDF')
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `${formType}-${accountNumber}.pdf`
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Error downloading form PDF:', error)
+    }
+  }
+
+  const emailForm = () => {
+    if (!formType || !accountNumber) return
+    const subject = encodeURIComponent(`FBS ${formType.replace('-', ' ')} for Account ${accountNumber}`)
+    const body = encodeURIComponent(`Please review the attached ${formType.replace('-', ' ')} for account ${accountNumber}.`)
+    window.location.href = `mailto:?subject=${subject}&body=${body}`
   }
 
   return (
@@ -57,6 +90,32 @@ export function Forms() {
           </div>
         </CardContent>
       </Card>
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Document Templates</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {DOCUMENT_TEMPLATES.map((doc) => (
+              <a
+                key={doc.value}
+                href={`/api/docs/${doc.value}`}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-lg border border-gray-200 bg-white p-4 hover:bg-gray-50"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-semibold">{doc.label}</p>
+                    <p className="text-sm text-gray-500">{doc.value}</p>
+                  </div>
+                  <Download className="w-5 h-5 text-gray-500" />
+                </div>
+              </a>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {formData && (
         <Card>
@@ -68,9 +127,12 @@ export function Forms() {
                   <Printer className="w-4 h-4 mr-2" />
                   Print
                 </Button>
-                <Button variant="outline" size="sm">
+                <Button variant="outline" size="sm" onClick={downloadFormPdf}>
                   <Download className="w-4 h-4 mr-2" />
                   Download PDF
+                </Button>
+                <Button variant="outline" size="sm" onClick={emailForm}>
+                  Email
                 </Button>
               </div>
             </CardTitle>

@@ -1,7 +1,50 @@
 import { Request, Response, Router } from 'express';
+import { PDFDocument, StandardFonts } from 'pdf-lib';
 import { prisma } from '../index';
 
 const router = Router();
+
+const createInvoicePdf = async (invoice: any, customer: any) => {
+  const pdfDoc = await PDFDocument.create();
+  const page = pdfDoc.addPage();
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const margin = 50;
+  let y = page.getHeight() - margin;
+  const lineHeight = 18;
+
+  const customerName = customer?.business_name_1 || `${customer?.first_name_1 || ''} ${customer?.last_name_1 || ''}`.trim();
+
+  page.drawText('FBS Invoice', { x: margin, y, size: 18, font: fontBold });
+  y -= lineHeight * 2;
+  page.drawText(`Invoice Number: ${invoice.invoice_number}`, { x: margin, y, size: 12, font: font });
+  y -= lineHeight;
+  page.drawText(`Account Number: ${invoice.account_number}`, { x: margin, y, size: 12, font: font });
+  y -= lineHeight;
+  page.drawText(`Customer: ${customerName}`, { x: margin, y, size: 12, font: font });
+  y -= lineHeight;
+  page.drawText(`Date: ${invoice.date}`, { x: margin, y, size: 12, font: font });
+  y -= lineHeight;
+  page.drawText(`Due Date: ${invoice.due_date ? new Date(invoice.due_date).toISOString().split('T')[0] : ''}`, { x: margin, y, size: 12, font: font });
+  y -= lineHeight;
+  page.drawText(`Status: ${invoice.status}`, { x: margin, y, size: 12, font: font });
+  y -= lineHeight * 1.5;
+
+  page.drawText('Description', { x: margin, y, size: 14, font: fontBold });
+  y -= lineHeight;
+  page.drawText(invoice.description || 'N/A', { x: margin, y, size: 12, font: font });
+  y -= lineHeight * 2;
+
+  page.drawText(`Amount: $${invoice.amount.toFixed(2)}`, { x: margin, y, size: 12, font: font });
+  y -= lineHeight;
+  page.drawText(`Sales Tax Rate: ${invoice.sales_tax_rate ?? 0}%`, { x: margin, y, size: 12, font: font });
+  y -= lineHeight;
+  page.drawText(`Sales Tax: $${invoice.sales_tax_amount?.toFixed(2) ?? '0.00'}`, { x: margin, y, size: 12, font: font });
+  y -= lineHeight;
+  page.drawText(`Total: $${invoice.total_amount?.toFixed(2) ?? '0.00'}`, { x: margin, y, size: 12, font: fontBold });
+
+  return pdfDoc.save();
+};
 
 // Get all invoices with filters
 router.get('/', async (req: Request, res: Response) => {
@@ -107,6 +150,32 @@ router.put('/:invoiceNumber/status', async (req: Request, res: Response) => {
     });
 
     res.json(invoice);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Download invoice as a PDF document
+router.get('/:invoiceNumber/download', async (req: Request, res: Response) => {
+  try {
+    const invoice = await prisma.invoice.findUnique({
+      where: { invoice_number: req.params.invoiceNumber }
+    });
+
+    if (!invoice) {
+      return res.status(404).json({ error: 'Invoice not found' });
+    }
+
+    const customer = await prisma.customer.findUnique({
+      where: { account_number: invoice.account_number }
+    });
+
+    const pdfBytes = await createInvoicePdf(invoice, customer);
+    const filename = `${invoice.invoice_number}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(Buffer.from(pdfBytes));
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });

@@ -1,4 +1,5 @@
 import { Request, Response, Router } from 'express';
+import { PDFDocument, StandardFonts } from 'pdf-lib';
 import { prisma } from '../index';
 
 const router = Router();
@@ -276,7 +277,7 @@ router.get('/past-due', async (req: Request, res: Response) => {
 });
 
 // Alias endpoint for statements route used by frontend
-const buildStatement = async (accountNumber: string) => {
+const buildStatement = async (accountNumber: string, type?: string) => {
   const customer = await prisma.customer.findUnique({
     where: { account_number: accountNumber }
   });
@@ -288,7 +289,7 @@ const buildStatement = async (accountNumber: string) => {
   const invoices = await prisma.invoice.findMany({
     where: {
       account_number: accountNumber,
-      status: { not: 'paid' }
+      ...(type === 'final' ? {} : { status: { not: 'paid' } })
     },
     orderBy: { due_date: 'asc' }
   });
@@ -317,6 +318,7 @@ const buildStatement = async (accountNumber: string) => {
 
   const totalDue = invoicesWithAging.reduce((sum: number, inv: any) => sum + Number(inv.total_amount), 0);
   const totalInterest = invoicesWithAging.reduce((sum: number, inv: any) => sum + Number(inv.interest_accrued), 0);
+  const totalPaid = payments.reduce((sum: number, payment: any) => sum + Number(payment.amount), 0);
 
   return {
     customer,
@@ -325,7 +327,8 @@ const buildStatement = async (accountNumber: string) => {
     summary: {
       total_due: totalDue,
       total_interest: totalInterest,
-      grand_total: totalDue + totalInterest
+      total_paid: totalPaid,
+      grand_total: totalDue + totalInterest - totalPaid
     },
     aging: invoicesWithAging.reduce((acc: Record<string, number>, inv: any) => {
       const bucket = inv.aging_bucket as string;
@@ -341,14 +344,144 @@ const buildStatement = async (accountNumber: string) => {
   };
 };
 
+const createStatementPdf = async (statement: any, accountNumber: string, statementType: string | undefined) => {
+  const pdfDoc = await PDFDocument.create();
+  const page = pdfDoc.addPage();
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const margin = 50;
+  const lineHeight = 16;
+  let y = page.getHeight() - margin;
+
+  page.drawText('FBS Statement', { x: margin, y, size: 18, font: fontBold });
+  y -= lineHeight * 2;
+  page.drawText(`Account: ${accountNumber}`, { x: margin, y, size: 12, font });
+  y -= lineHeight;
+  page.drawText(`Statement Type: ${statementType || 'customer'}`, { x: margin, y, size: 12, font });
+  y -= lineHeight;
+  page.drawText(`Generated: ${new Date().toISOString().split('T')[0]}`, { x: margin, y, size: 12, font });
+  y -= lineHeight * 1.5;
+
+  const customerName = statement.customer?.business_name_1 || `${statement.customer?.first_name_1 || ''} ${statement.customer?.last_name_1 || ''}`.trim();
+  page.drawText(`Customer: ${customerName}`, { x: margin, y, size: 12, font });
+  y -= lineHeight;
+  page.drawText(`Class Code: ${statement.customer?.class_code || ''}`, { x: margin, y, size: 12, font });
+  y -= lineHeight;
+  page.drawText(`Address: ${statement.customer?.billing_address_1 || ''}`, { x: margin, y, size: 12, font });
+  y -= lineHeight * 1.5;
+
+  page.drawText('Aging Summary', { x: margin, y, size: 14, font: fontBold });
+  y -= lineHeight;
+  const agingBuckets = ['1-30', '30-60', '60-90', '90-120', '120+'];
+  agingBuckets.forEach((bucket) => {
+    page.drawText(`${bucket}: $${((statement.aging?.[bucket] ?? 0) as number).toFixed(2)}`, { x: margin, y, size: 12, font });
+    y -= lineHeight;
+  });
+  y -= lineHeight;
+
+  page.drawText('Invoices', { x: margin, y, size: 14, font: fontBold });
+  y -= lineHeight;
+  page.drawText('Invoice # | Date | Amount | Status', { x: margin, y, size: 11, font });
+  y -= lineHeight;
+
+  let currentPage = page;
+  statement.invoices?.forEach((invoice: any) => {
+    if (y < margin + lineHeight * 4) {
+      currentPage = pdfDoc.addPage();
+      y = currentPage.getHeight() - margin;
+    }
+    const row = `${invoice.invoice_number} | ${invoice.date} | $${invoice.amount.toFixed(2)} | ${invoice.status}`;
+    currentPage.drawText(row, { x: margin, y, size: 11, font });
+    y -= lineHeight;
+  });
+
+  y -= lineHeight;
+  currentPage.drawText(`Total Due: $${((statement.summary?.total_due ?? 0) as number).toFixed(2)}`, { x: margin, y, size: 12, font });
+  y -= lineHeight;
+  currentPage.drawText(`Interest: $${((statement.summary?.total_interest ?? 0) as number).toFixed(2)}`, { x: margin, y, size: 12, font });
+  y -= lineHeight;
+  currentPage.drawText(`Payments Received: $${((statement.summary?.total_paid ?? 0) as number).toFixed(2)}`, { x: margin, y, size: 12, font });
+  y -= lineHeight;
+  currentPage.drawText(`Balance Due: $${((statement.summary?.grand_total ?? 0) as number).toFixed(2)}`, { x: margin, y, size: 12, font: fontBold });
+
+  if (statement.payments?.length) {
+    y -= lineHeight * 1.5;
+    if (y < margin + lineHeight * 6) {
+      currentPage = pdfDoc.addPage();
+      y = currentPage.getHeight() - margin;
+    }
+    currentPage.drawText('Payments', { x: margin, y, size: 14, font: fontBold });
+    y -= lineHeight;
+    currentPage.drawText('Date | Amount | Type', { x: margin, y, size: 11, font });
+    y -= lineHeight;
+
+    statement.payments.forEach((payment: any) => {
+      if (y < margin + lineHeight * 4) {
+        currentPage = pdfDoc.addPage();
+        y = currentPage.getHeight() - margin;
+      }
+      currentPage.drawText(`${payment.date} | $${payment.amount.toFixed(2)} | ${payment.payment_type || 'N/A'}`, { x: margin, y, size: 11, font });
+      y -= lineHeight;
+    });
+  }
+
+  return pdfDoc.save();
+};
+
 router.get('/statements/:accountNumber', async (req: Request, res: Response) => {
   try {
     const { accountNumber } = req.params;
-    const statement = await buildStatement(accountNumber);
+    const { type } = req.query;
+    const statement = await buildStatement(accountNumber, type as string | undefined);
     if (!statement) {
       return res.status(404).json({ error: 'Customer not found' });
     }
     res.json(statement);
+  } catch (err: unknown) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.get('/statements/:accountNumber/download', async (req: Request, res: Response) => {
+  try {
+    const { accountNumber } = req.params;
+    const { type } = req.query;
+    const statement = await buildStatement(accountNumber, type as string | undefined);
+    if (!statement) {
+      return res.status(404).json({ error: 'Customer not found' });
+    }
+
+    const lines: string[] = [];
+    lines.push(`Statement for Account ${accountNumber}`);
+    lines.push(`Generated: ${new Date().toISOString().split('T')[0]}`);
+    lines.push('');
+    const customerName = statement.customer?.business_name_1 || `${statement.customer?.first_name_1 || ''} ${statement.customer?.last_name_1 || ''}`.trim();
+    lines.push(`Customer: ${customerName}`);
+    lines.push(`Account Number: ${statement.customer?.account_number || ''}`);
+    lines.push(`Class Code: ${statement.customer?.class_code || ''}`);
+    lines.push('');
+    lines.push('Aging Summary:');
+    lines.push(`  1-30 Days: $${(statement.aging?.['1-30'] ?? 0).toFixed(2)}`);
+    lines.push(`  30-60 Days: $${(statement.aging?.['30-60'] ?? 0).toFixed(2)}`);
+    lines.push(`  60-90 Days: $${(statement.aging?.['60-90'] ?? 0).toFixed(2)}`);
+    lines.push(`  90-120 Days: $${(statement.aging?.['90-120'] ?? 0).toFixed(2)}`);
+    lines.push(`  Over 120 Days: $${(statement.aging?.['120+'] ?? 0).toFixed(2)}`);
+    lines.push('');
+    lines.push('Invoices:');
+    statement.invoices?.forEach((invoice: any) => {
+      lines.push(`  ${invoice.invoice_number} | ${invoice.date} | ${invoice.description} | $${invoice.amount.toFixed(2)} | ${invoice.status}`);
+    });
+    lines.push('');
+    lines.push(`Total Due: $${(statement.summary?.total_due ?? 0).toFixed(2)}`);
+    lines.push(`Total Interest: $${(statement.summary?.total_interest ?? 0).toFixed(2)}`);
+    lines.push(`Grand Total: $${(statement.summary?.grand_total ?? 0).toFixed(2)}`);
+
+    const pdfBytes = await createStatementPdf(statement, accountNumber, type as string | undefined);
+    const filename = `${accountNumber}-statement-${type ?? 'customer'}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(Buffer.from(pdfBytes));
   } catch (err: unknown) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });
