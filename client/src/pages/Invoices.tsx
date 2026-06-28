@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
-import { Card, CardContent } from '../components/ui/Card'
+import { Download, Plus } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { Button } from '../components/ui/Button'
-import { Plus, Download } from 'lucide-react'
+import { Card, CardContent } from '../components/ui/Card'
 
 interface Invoice {
   id: string
@@ -35,7 +35,11 @@ export function Invoices() {
 
   const generateMonthlyBilling = async () => {
     try {
-      const response = await fetch('/api/invoices/monthly', { method: 'POST' })
+      const response = await fetch('/api/invoices/monthly', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      })
       if (response.ok) {
         fetchInvoices()
       }
@@ -83,11 +87,10 @@ export function Invoices() {
                       <td className="py-3 px-4">{invoice.description}</td>
                       <td className="py-3 px-4">${invoice.amount.toFixed(2)}</td>
                       <td className="py-3 px-4">
-                        <span className={`px-2 py-1 rounded text-sm ${
-                          invoice.status === 'paid' ? 'bg-green-100 text-green-800' :
-                          invoice.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                          'bg-red-100 text-red-800'
-                        }`}>
+                        <span className={`px-2 py-1 rounded text-sm ${invoice.status === 'paid' ? 'bg-green-100 text-green-800' :
+                            invoice.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                              'bg-red-100 text-red-800'
+                          }`}>
                           {invoice.status}
                         </span>
                       </td>

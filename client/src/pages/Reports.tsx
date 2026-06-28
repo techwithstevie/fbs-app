@@ -1,7 +1,7 @@
+import { Download, FileText } from 'lucide-react'
 import { useState } from 'react'
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
-import { FileText, Download } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 
 export function Reports() {
   const [selectedReport, setSelectedReport] = useState('')
@@ -13,9 +13,16 @@ export function Reports() {
     try {
       const response = await fetch(`/api/reports/${selectedReport}`)
       const data = await response.json()
-      setReportData(data.data || [])
+      if (selectedReport === 'accounts-receivable' || selectedReport === 'service-history') {
+        setReportData(data || [])
+      } else if (selectedReport === 'aging') {
+        setReportData(data.rows || [])
+      } else {
+        setReportData(data || [])
+      }
     } catch (error) {
       console.error('Error generating report:', error)
+      setReportData([])
     } finally {
       setLoading(false)
     }

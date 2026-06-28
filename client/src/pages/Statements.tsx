@@ -1,8 +1,8 @@
+import { Download, FileText } from 'lucide-react'
 import { useState } from 'react'
-import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
-import { Input } from '../components/ui/Input'
 import { Button } from '../components/ui/Button'
-import { FileText, Download } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
+import { Input } from '../components/ui/Input'
 
 export function Statements() {
   const [accountNumber, setAccountNumber] = useState('')
@@ -18,6 +18,7 @@ export function Statements() {
       setStatementData(data)
     } catch (error) {
       console.error('Error generating statement:', error)
+      setStatementData(null)
     } finally {
       setLoading(false)
     }

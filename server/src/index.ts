@@ -1,7 +1,7 @@
-import express from 'express';
+import { PrismaClient } from '@prisma/client';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { PrismaClient } from '@prisma/client';
+import express from 'express';
 
 dotenv.config();
 
@@ -30,6 +30,7 @@ app.use('/api/invoices', require('./routes/invoices'));
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/service-calls', require('./routes/serviceCalls'));
 app.use('/api/reports', require('./routes/reports'));
+app.use('/api/forms', require('./routes/forms'));
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'FBS Server is running' });
