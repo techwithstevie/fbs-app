@@ -112,6 +112,9 @@ interface FormData {
   billing_code: string
   billing_description?: string
   billing_amount: string
+  sales_tax_rate: string
+  next_billing_month: string
+  next_billing_year: string
   service_call_rate: string
   hourly_labor_rate: string
   discount_percent: string
@@ -188,6 +191,9 @@ export function CustomerForm() {
     personal_emails: [],
     billing_code: '',
     billing_amount: '',
+    sales_tax_rate: '',
+    next_billing_month: '',
+    next_billing_year: '',
     service_call_rate: '',
     hourly_labor_rate: '',
     discount_percent: '',
@@ -253,6 +259,9 @@ export function CustomerForm() {
       setFormData({
         ...data,
         billing_amount: data.billing_amount != null ? String(data.billing_amount) : '',
+        sales_tax_rate: data.sales_tax_rate != null ? String(data.sales_tax_rate) : '',
+        next_billing_month: data.next_billing_month != null ? String(data.next_billing_month) : '',
+        next_billing_year: data.next_billing_year != null ? String(data.next_billing_year) : '',
         service_call_rate: data.service_call_rate != null ? String(data.service_call_rate) : '',
         hourly_labor_rate: data.hourly_labor_rate != null ? String(data.hourly_labor_rate) : '',
         discount_percent: data.discount_percent != null ? String(data.discount_percent) : '',
@@ -371,10 +380,23 @@ export function CustomerForm() {
         : '/api/customers'
       const method = isEditing ? 'PUT' : 'POST'
 
+      const payload = {
+        ...formData,
+        billing_amount: formData.billing_amount !== '' ? Number(formData.billing_amount) : undefined,
+        sales_tax_rate: formData.sales_tax_rate !== '' ? Number(formData.sales_tax_rate) : undefined,
+        service_call_rate: formData.service_call_rate !== '' ? Number(formData.service_call_rate) : undefined,
+        hourly_labor_rate: formData.hourly_labor_rate !== '' ? Number(formData.hourly_labor_rate) : undefined,
+        discount_percent: formData.discount_percent !== '' ? Number(formData.discount_percent) : undefined
+      }
+
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({
+          ...payload,
+          next_billing_month: payload.next_billing_month !== '' ? Number(payload.next_billing_month) : undefined,
+          next_billing_year: payload.next_billing_year !== '' ? Number(payload.next_billing_year) : undefined
+        })
       })
 
       if (response.ok) {
@@ -406,9 +428,27 @@ export function CustomerForm() {
             <ArrowLeft className="w-4 h-4" />
           </Button>
         </Link>
-        <h1 className="text-3xl font-bold">
-          {isEditing ? 'Edit Customer' : 'Add New Customer'}
-        </h1>
+        <div>
+          <h1 className="text-3xl font-bold">
+            {isEditing ? 'Edit Customer' : 'Add New Customer'}
+          </h1>
+          {isEditing && (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link to={`/invoices?accountNumber=${accountNumber}`}>
+                <Button variant="outline" size="sm">Create Invoice</Button>
+              </Link>
+              <Link to={`/payments?accountNumber=${accountNumber}`}>
+                <Button variant="outline" size="sm">Post Payment</Button>
+              </Link>
+              <Link to={`/service-calls?accountNumber=${accountNumber}`}>
+                <Button variant="outline" size="sm">Create Service Call</Button>
+              </Link>
+              <Link to={`/statements?accountNumber=${accountNumber}`}>
+                <Button variant="outline" size="sm">View Statement</Button>
+              </Link>
+            </div>
+          )}
+        </div>
       </div>
 
       <form onSubmit={handleSubmit}>
@@ -721,6 +761,36 @@ export function CustomerForm() {
                   type="number"
                   step="0.01"
                   value={formData.billing_amount}
+                  onChange={handleChange}
+                />
+              </div>
+              <div>
+                <Label>Sales Tax Rate %</Label>
+                <Input
+                  name="sales_tax_rate"
+                  type="number"
+                  step="0.01"
+                  value={formData.sales_tax_rate}
+                  onChange={handleChange}
+                />
+              </div>
+              <div>
+                <Label>Next Billing Month</Label>
+                <Input
+                  name="next_billing_month"
+                  type="number"
+                  min={1}
+                  max={12}
+                  value={formData.next_billing_month}
+                  onChange={handleChange}
+                />
+              </div>
+              <div>
+                <Label>Next Billing Year</Label>
+                <Input
+                  name="next_billing_year"
+                  type="number"
+                  value={formData.next_billing_year}
                   onChange={handleChange}
                 />
               </div>

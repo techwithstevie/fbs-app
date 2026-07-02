@@ -190,6 +190,11 @@ router.post('/update-tax-rate', async (req: Request, res: Response) => {
       if (criteria.monitoringAgreementOnFile !== undefined) {
         where.monitoring_agreement_on_file = criteria.monitoringAgreementOnFile ? 1 : 0;
       }
+      if (criteria.taxExemptOnly) {
+        where.billing_code = {
+          in: Array.from({ length: 80 }, (_, i) => String(i + 20))
+        };
+      }
       if (criteria.dateInstalledFrom) {
         where.installation_date = { gte: criteria.dateInstalledFrom };
       }

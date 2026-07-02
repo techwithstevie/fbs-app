@@ -81,6 +81,7 @@ const customerCreateSchema = z.object({
   billing_code: z.string().regex(/^\d{1,3}$/, 'Billing code must be 1-3 digits').optional(),
   billing_description: z.string().max(255).optional(),
   billing_amount: optionalNumberField,
+  sales_tax_rate: optionalNumberField,
   next_billing_month: z.number().int().min(1).max(12).optional(),
   next_billing_year: z.number().int().optional(),
   service_call_rate: optionalNumberField,

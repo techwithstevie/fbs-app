@@ -236,10 +236,15 @@ export function Customers() {
                           })()
                         ) : '-'}
                       </td>
-                      <td className="py-3 px-4">
+                      <td className="py-3 px-4 flex gap-2">
                         <Link to={`/customers/${customer.account_number}`}>
                           <Button variant="outline" size="sm">
                             <Edit className="w-4 h-4" />
+                          </Button>
+                        </Link>
+                        <Link to={`/statements?accountNumber=${customer.account_number}&type=customer`}>
+                          <Button variant="outline" size="sm">
+                            Statement
                           </Button>
                         </Link>
                       </td>

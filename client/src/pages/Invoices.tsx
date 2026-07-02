@@ -1,5 +1,6 @@
 import { Download, Plus } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader } from '../components/ui/Card'
 import { Input } from '../components/ui/Input'
@@ -25,6 +26,7 @@ interface InvoiceFormData {
 }
 
 export function Invoices() {
+  const [searchParams] = useSearchParams()
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [loading, setLoading] = useState(true)
   const [successMessage, setSuccessMessage] = useState('')
@@ -47,7 +49,11 @@ export function Invoices() {
 
   useEffect(() => {
     fetchInvoices()
-  }, [])
+    const account = searchParams.get('accountNumber')
+    if (account) {
+      setInvoiceForm(prev => ({ ...prev, account_number: account }))
+    }
+  }, [searchParams])
 
   const fetchInvoices = async () => {
     try {

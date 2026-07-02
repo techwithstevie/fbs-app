@@ -205,6 +205,19 @@ router.put('/:serviceCallNumber/complete', async (req: Request, res: Response) =
   }
 });
 
+// Delete service call
+router.delete('/:serviceCallNumber', async (req: Request, res: Response) => {
+  try {
+    await prisma.serviceCall.delete({
+      where: { service_call_number: req.params.serviceCallNumber }
+    });
+    res.json({ message: 'Service call deleted successfully' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // Get service call by number
 router.get('/:serviceCallNumber', async (req: Request, res: Response) => {
   try {

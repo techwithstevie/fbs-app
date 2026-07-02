@@ -1,10 +1,12 @@
 import { Download, FileText, Printer } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Input } from '../components/ui/Input'
 
 export function Statements() {
+  const [searchParams] = useSearchParams()
   const [accountNumber, setAccountNumber] = useState('')
   const [statementType, setStatementType] = useState('customer')
   const [statementData, setStatementData] = useState<any>(null)
@@ -12,10 +14,17 @@ export function Statements() {
 
   const statementRef = useRef<HTMLDivElement>(null)
 
-  const generateStatement = async () => {
+  const customerName = statementData?.customer
+    ? statementData.customer.business_name_1 || [statementData.customer.first_name_1, statementData.customer.last_name_1].filter(Boolean).join(' ')
+    : '-'
+
+  const customerAddress = statementData?.customer?.billing_address_1 || statementData?.customer?.business_address_1 || '-'
+  const statementLabel = statementType === 'final' ? 'Final Statement' : 'Customer Statement'
+
+  const generateStatement = async (account = accountNumber, type = statementType) => {
     setLoading(true)
     try {
-      const response = await fetch(`/api/reports/statements/${accountNumber}?type=${statementType}`)
+      const response = await fetch(`/api/reports/statements/${account}?type=${type}`)
       const data = await response.json()
       setStatementData(data)
     } catch (error) {
@@ -25,6 +34,16 @@ export function Statements() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    const account = searchParams.get('accountNumber') || ''
+    const type = searchParams.get('type') || 'customer'
+    setAccountNumber(account)
+    setStatementType(type)
+    if (account) {
+      generateStatement(account, type)
+    }
+  }, [searchParams])
 
   const printStatement = () => {
     if (statementRef.current) {
@@ -91,7 +110,7 @@ export function Statements() {
               <option value="customer">Customer Statement</option>
               <option value="final">Final Statement</option>
             </select>
-            <Button onClick={generateStatement}>
+            <Button onClick={() => generateStatement()}>
               <FileText className="w-4 h-4 mr-2" />
               Generate
             </Button>
@@ -102,21 +121,24 @@ export function Statements() {
       {statementData && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex justify-between items-center">
-              Statement for Account {accountNumber}
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={printStatement}>
-                  <Printer className="w-4 h-4 mr-2" />
-                  Print
-                </Button>
-                <Button variant="outline" size="sm" onClick={downloadStatement}>
-                  <Download className="w-4 h-4 mr-2" />
-                  Download
-                </Button>
-                <Button variant="outline" size="sm" onClick={emailStatement}>
-                  Email
-                </Button>
+            <CardTitle className="flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-4">
+                <span>Statement for Account {accountNumber}</span>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={printStatement}>
+                    <Printer className="w-4 h-4 mr-2" />
+                    Print
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={downloadStatement}>
+                    <Download className="w-4 h-4 mr-2" />
+                    Download
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={emailStatement}>
+                    Email
+                  </Button>
+                </div>
               </div>
+              <div className="text-sm text-gray-600">{statementLabel}</div>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -125,19 +147,23 @@ export function Statements() {
             ) : (
               <div className="space-y-4">
                 <div ref={statementRef}>
-                  <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded">
                     <div>
                       <p className="text-sm text-gray-600">Customer Name</p>
-                      <p className="font-medium">{statementData.customer?.business_name_1 || statementData.customer?.first_name_1 + ' ' + statementData.customer?.last_name_1}</p>
+                      <p className="font-medium">{customerName}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-600">Account Number</p>
-                      <p className="font-medium">{statementData.customer?.account_number}</p>
+                      <p className="font-medium">{statementData.customer?.account_number || '-'}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600">Address</p>
+                      <p className="font-medium">{customerAddress}</p>
                     </div>
                   </div>
 
                   {statementData.aging && (
-                    <div className="grid grid-cols-5 gap-4 p-4 bg-blue-50 rounded">
+                    <div className="grid grid-cols-1 sm:grid-cols-5 gap-4 p-4 bg-blue-50 rounded">
                       <div className="text-center">
                         <p className="text-sm text-gray-600">1-30 Days</p>
                         <p className="font-bold text-lg">${statementData.aging['1-30']?.toFixed(2) || '0.00'}</p>
@@ -216,15 +242,15 @@ export function Statements() {
                     <div className="text-right space-y-2">
                       <div>
                         <p className="text-sm text-gray-600">Total Due</p>
-                        <p className="font-bold text-2xl">${statementData.total_due?.toFixed(2) || '0.00'}</p>
+                        <p className="font-bold text-2xl">${statementData.summary?.total_due?.toFixed(2) || '0.00'}</p>
                       </div>
                       <div>
                         <p className="text-sm text-gray-600">Payments Received</p>
-                        <p className="font-medium">${statementData.total_paid?.toFixed(2) || '0.00'}</p>
+                        <p className="font-medium">${statementData.summary?.total_paid?.toFixed(2) || '0.00'}</p>
                       </div>
                       <div>
                         <p className="text-sm text-gray-600">Balance Due</p>
-                        <p className="font-bold text-2xl text-red-600">${statementData.grand_total?.toFixed(2) || '0.00'}</p>
+                        <p className="font-bold text-2xl text-red-600">${statementData.summary?.grand_total?.toFixed(2) || '0.00'}</p>
                       </div>
                     </div>
                   </div>

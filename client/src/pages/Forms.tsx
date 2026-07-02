@@ -1,5 +1,6 @@
 import { Download, FileText, Printer } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Input } from '../components/ui/Input'
@@ -12,6 +13,7 @@ const DOCUMENT_TEMPLATES = [
 ]
 
 export function Forms() {
+  const [searchParams] = useSearchParams()
   const [accountNumber, setAccountNumber] = useState('')
   const [formType, setFormType] = useState('')
   const [formData, setFormData] = useState<any>(null)
@@ -55,6 +57,11 @@ export function Forms() {
     const body = encodeURIComponent(`Please review the attached ${formType.replace('-', ' ')} for account ${accountNumber}.`)
     window.location.href = `mailto:?subject=${subject}&body=${body}`
   }
+
+  useEffect(() => {
+    const account = searchParams.get('accountNumber') || ''
+    setAccountNumber(account)
+  }, [searchParams])
 
   return (
     <div className="p-8">

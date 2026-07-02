@@ -1,5 +1,6 @@
 import { Plus } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Input } from '../components/ui/Input'
@@ -9,26 +10,35 @@ interface Payment {
   payment_number: string
   account_number: string
   date: string
+  invoice_number?: string
   check_number?: string
+  deposit_date?: string
   amount: number
   payment_type: string
 }
 
 export function Payments() {
+  const [searchParams] = useSearchParams()
   const [payments, setPayments] = useState<Payment[]>([])
   const [loading, setLoading] = useState(true)
   const [successMessage, setSuccessMessage] = useState('')
   const [formData, setFormData] = useState({
     account_number: '',
     date: new Date().toISOString().split('T')[0],
+    invoice_number: '',
     check_number: '',
+    deposit_date: '',
     amount: '',
-    payment_type: 'check'
+    payment_type: 'service'
   })
 
   useEffect(() => {
     fetchPayments()
-  }, [])
+    const account = searchParams.get('accountNumber')
+    if (account) {
+      setFormData(prev => ({ ...prev, account_number: account }))
+    }
+  }, [searchParams])
 
   const fetchPayments = async () => {
     try {
@@ -55,9 +65,11 @@ export function Payments() {
         setFormData({
           account_number: '',
           date: new Date().toISOString().split('T')[0],
+          invoice_number: '',
           check_number: '',
+          deposit_date: '',
           amount: '',
-          payment_type: 'check'
+          payment_type: 'service'
         })
         setSuccessMessage('Payment posted successfully.')
         setTimeout(() => setSuccessMessage(''), 3000)
@@ -97,9 +109,20 @@ export function Payments() {
               required
             />
             <Input
+              placeholder="Invoice Number"
+              value={formData.invoice_number}
+              onChange={(e) => setFormData({ ...formData, invoice_number: e.target.value })}
+            />
+            <Input
               placeholder="Check Number"
               value={formData.check_number}
               onChange={(e) => setFormData({ ...formData, check_number: e.target.value })}
+            />
+            <Input
+              type="date"
+              placeholder="Deposit Date"
+              value={formData.deposit_date}
+              onChange={(e) => setFormData({ ...formData, deposit_date: e.target.value })}
             />
             <Input
               type="number"
@@ -114,9 +137,12 @@ export function Payments() {
               onChange={(e) => setFormData({ ...formData, payment_type: e.target.value })}
               className="h-10 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
             >
-              <option value="check">Check</option>
-              <option value="cash">Cash</option>
-              <option value="credit">Credit Card</option>
+              <option value="service">Service</option>
+              <option value="monitoring">Monitoring</option>
+              <option value="tax_exempt">Tax Exempt</option>
+              <option value="taxable">Taxable</option>
+              <option value="sale">Sale</option>
+              <option value="deposit">Deposit</option>
             </select>
             <Button type="submit" className="md:col-span-3">
               <Plus className="w-4 h-4 mr-2" />
@@ -140,6 +166,8 @@ export function Payments() {
                     <th className="text-left py-3 px-4 font-medium">Payment #</th>
                     <th className="text-left py-3 px-4 font-medium">Account #</th>
                     <th className="text-left py-3 px-4 font-medium">Date</th>
+                    <th className="text-left py-3 px-4 font-medium">Invoice #</th>
+                    <th className="text-left py-3 px-4 font-medium">Deposit Date</th>
                     <th className="text-left py-3 px-4 font-medium">Check #</th>
                     <th className="text-left py-3 px-4 font-medium">Amount</th>
                     <th className="text-left py-3 px-4 font-medium">Type</th>
@@ -151,6 +179,8 @@ export function Payments() {
                       <td className="py-3 px-4">{payment.payment_number}</td>
                       <td className="py-3 px-4">{payment.account_number}</td>
                       <td className="py-3 px-4">{payment.date}</td>
+                      <td className="py-3 px-4">{payment.invoice_number || '-'}</td>
+                      <td className="py-3 px-4">{payment.deposit_date || '-'}</td>
                       <td className="py-3 px-4">{payment.check_number || '-'}</td>
                       <td className="py-3 px-4">${payment.amount.toFixed(2)}</td>
                       <td className="py-3 px-4">{payment.payment_type}</td>

@@ -1,16 +1,18 @@
-import { Check, Download, Plus } from 'lucide-react'
+import { Check, Download, Plus, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/Card'
 import { Input } from '../components/ui/Input'
 
 interface ServiceCall {
   id: string
+  service_call_number: string
   account_number: string
   date: string
   issue_code: string
   special_message?: string
-  description: string
+  issue_description?: string
   custom_problem?: string
   labor_hours: number
   parts_cost: number
@@ -18,6 +20,7 @@ interface ServiceCall {
 }
 
 export function ServiceCalls() {
+  const [searchParams] = useSearchParams()
   const [serviceCalls, setServiceCalls] = useState<ServiceCall[]>([])
   const [loading, setLoading] = useState(true)
   const [successMessage, setSuccessMessage] = useState('')
@@ -26,7 +29,7 @@ export function ServiceCalls() {
     date: new Date().toISOString().split('T')[0],
     special_message: '',
     issue_code: '',
-    description: '',
+    issue_description: '',
     custom_problem: '',
     labor_hours: '',
     parts_cost: ''
@@ -34,7 +37,11 @@ export function ServiceCalls() {
 
   useEffect(() => {
     fetchServiceCalls()
-  }, [])
+    const account = searchParams.get('accountNumber')
+    if (account) {
+      setFormData(prev => ({ ...prev, account_number: account }))
+    }
+  }, [searchParams])
 
   const fetchServiceCalls = async () => {
     try {
@@ -54,7 +61,11 @@ export function ServiceCalls() {
       const response = await fetch('/api/service-calls', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({
+          ...formData,
+          labor_hours: Number(formData.labor_hours || 0),
+          parts_cost: Number(formData.parts_cost || 0)
+        })
       })
       if (response.ok) {
         fetchServiceCalls()
@@ -63,7 +74,7 @@ export function ServiceCalls() {
           date: new Date().toISOString().split('T')[0],
           special_message: '',
           issue_code: '',
-          description: '',
+          issue_description: '',
           custom_problem: '',
           labor_hours: '',
           parts_cost: ''
@@ -84,6 +95,20 @@ export function ServiceCalls() {
       }
     } catch (error) {
       console.error('Error marking service call complete:', error)
+    }
+  }
+
+  const deleteServiceCall = async (id: string) => {
+    if (!window.confirm('Delete this service call? This action cannot be undone.')) {
+      return
+    }
+    try {
+      const response = await fetch(`/api/service-calls/${id}`, { method: 'DELETE' })
+      if (response.ok) {
+        fetchServiceCalls()
+      }
+    } catch (error) {
+      console.error('Error deleting service call:', error)
     }
   }
 
@@ -158,8 +183,8 @@ export function ServiceCalls() {
             </select>
             <Input
               placeholder="Description"
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              value={formData.issue_description}
+              onChange={(e) => setFormData({ ...formData, issue_description: e.target.value })}
               className="md:col-span-2"
             />
             {formData.issue_code === '49' && (
@@ -219,7 +244,7 @@ export function ServiceCalls() {
                       <td className="py-3 px-4">{call.account_number}</td>
                       <td className="py-3 px-4">{call.date}</td>
                       <td className="py-3 px-4">{call.issue_code}</td>
-                      <td className="py-3 px-4">{call.special_message || call.description || (call.custom_problem ? `Custom: ${call.custom_problem}` : '')}</td>
+                      <td className="py-3 px-4">{call.special_message || call.issue_description || (call.custom_problem ? `Custom: ${call.custom_problem}` : '')}</td>
                       <td className="py-3 px-4">{call.labor_hours}</td>
                       <td className="py-3 px-4">${call.parts_cost.toFixed(2)}</td>
                       <td className="py-3 px-4">
@@ -237,6 +262,9 @@ export function ServiceCalls() {
                         )}
                         <Button variant="outline" size="sm" onClick={() => downloadServiceCall(call.service_call_number)}>
                           <Download className="w-4 h-4" />
+                        </Button>
+                        <Button variant="destructive" size="icon" onClick={() => deleteServiceCall(call.service_call_number)}>
+                          <Trash2 className="w-4 h-4" />
                         </Button>
                       </td>
                     </tr>
